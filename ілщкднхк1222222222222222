@@ -1,0 +1,1003 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+
+local localPlayer = Players.LocalPlayer
+
+local W, H = 480, 360
+local SIDE = 132
+
+local COLORS = {
+	bg = Color3.fromRGB(24, 14, 44),
+	bar = Color3.fromRGB(34, 20, 62),
+	card = Color3.fromRGB(58, 36, 102),
+	cardHover = Color3.fromRGB(78, 50, 134),
+	accent = Color3.fromRGB(196, 120, 255),
+	accent2 = Color3.fromRGB(112, 72, 255),
+	text = Color3.fromRGB(246, 240, 255),
+	sub = Color3.fromRGB(182, 162, 220),
+	off = Color3.fromRGB(92, 68, 136),
+	on = Color3.fromRGB(168, 108, 255),
+	button = Color3.fromRGB(74, 48, 126),
+	buttonHover = Color3.fromRGB(100, 66, 166),
+	fpsGood = Color3.fromRGB(90, 220, 140),
+	fpsMid = Color3.fromRGB(255, 205, 80),
+	fpsBad = Color3.fromRGB(255, 90, 130),
+}
+
+-- Прозрачность (0 = непрозрачно, 1 = невидимо). Меняй под вкус.
+local T = {
+	menu = 0.22,
+	side = 0.35,
+	card = 0.4,
+	button = 0.3,
+}
+
+local SWATCHES = {
+	Color3.fromRGB(255, 0, 0),
+	Color3.fromRGB(255, 140, 0),
+	Color3.fromRGB(255, 230, 0),
+	Color3.fromRGB(60, 220, 110),
+	Color3.fromRGB(0, 200, 255),
+	Color3.fromRGB(190, 80, 255),
+}
+
+local SKIES = {
+	{name = "Обычное", default = true},
+	{
+		name = "Закат",
+		time = 17.9,
+		stars = 0,
+		ambient = Color3.fromRGB(110, 70, 120),
+		outdoor = Color3.fromRGB(150, 95, 120),
+		atmo = {density = 0.35, offset = 0.25, color = Color3.fromRGB(255, 150, 110), decay = Color3.fromRGB(130, 70, 140), glare = 0.6, haze = 1.6},
+		tint = Color3.fromRGB(255, 235, 225),
+		saturation = 0.2,
+	},
+	{
+		name = "Ночь",
+		time = 0,
+		stars = 4000,
+		ambient = Color3.fromRGB(40, 45, 80),
+		outdoor = Color3.fromRGB(60, 70, 110),
+		atmo = {density = 0.25, offset = 0, color = Color3.fromRGB(60, 80, 140), decay = Color3.fromRGB(20, 25, 60), glare = 0, haze = 0.5},
+		tint = Color3.fromRGB(225, 235, 255),
+		saturation = 0,
+	},
+	{
+		name = "Космос",
+		time = 0,
+		stars = 6000,
+		black = true,
+		ambient = Color3.fromRGB(50, 40, 80),
+		outdoor = Color3.fromRGB(70, 60, 110),
+		tint = Color3.fromRGB(240, 230, 255),
+		saturation = 0.3,
+	},
+	{
+		name = "Неон",
+		time = 21,
+		stars = 3000,
+		ambient = Color3.fromRGB(120, 40, 160),
+		outdoor = Color3.fromRGB(160, 50, 170),
+		atmo = {density = 0.4, offset = 0.1, color = Color3.fromRGB(255, 60, 200), decay = Color3.fromRGB(60, 20, 140), glare = 1, haze = 2},
+		tint = Color3.fromRGB(255, 220, 255),
+		saturation = 0.4,
+	},
+}
+
+local locked = false
+local isOpen = false
+local hlOn = false
+local tagsOn = false
+local hlColor = SWATCHES[1]
+local hlTransparency = 0.5
+local highlights = {}
+local nameTags = {}
+
+local function round(obj, radius)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, radius)
+	c.Parent = obj
+	return c
+end
+
+local function gradient(parent, rotation)
+	local g = Instance.new("UIGradient")
+	g.Color = ColorSequence.new(COLORS.accent, COLORS.accent2)
+	g.Rotation = rotation or 0
+	g.Parent = parent
+	return g
+end
+
+local function gradientStroke(parent, thickness)
+	local s = Instance.new("UIStroke")
+	s.Thickness = thickness
+	s.Color = Color3.new(1, 1, 1)
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	s.Parent = parent
+	gradient(s, 45)
+	return s
+end
+
+local function tween(obj, time, props)
+	local t = TweenService:Create(obj, TweenInfo.new(time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props)
+	t:Play()
+	return t
+end
+
+local function addHover(button, normal, hover)
+	button.MouseEnter:Connect(function()
+		tween(button, 0.12, {BackgroundColor3 = hover})
+	end)
+	button.MouseLeave:Connect(function()
+		tween(button, 0.12, {BackgroundColor3 = normal})
+	end)
+end
+
+local function label(parent, text, size, font, color, x, y, w, h, align)
+	local l = Instance.new("TextLabel")
+	l.BackgroundTransparency = 1
+	l.Text = text
+	l.TextSize = size
+	l.Font = font
+	l.TextColor3 = color
+	l.Position = UDim2.new(0, x, 0, y)
+	l.Size = UDim2.new(0, w, 0, h)
+	l.TextXAlignment = align or Enum.TextXAlignment.Left
+	l.Parent = parent
+	return l
+end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "MenuGui"
+gui.ResetOnSpawn = false
+gui.Parent = localPlayer:WaitForChild("PlayerGui")
+
+-- Кнопка открытия (буква S)
+local openButton = Instance.new("TextButton")
+openButton.Size = UDim2.new(0, 46, 0, 46)
+openButton.Position = UDim2.new(0, 16, 0.5, -23)
+openButton.BackgroundColor3 = COLORS.bg
+openButton.BackgroundTransparency = T.menu
+openButton.Text = ""
+openButton.AutoButtonColor = false
+openButton.Visible = false
+openButton.Parent = gui
+round(openButton, 23)
+gradientStroke(openButton, 2)
+addHover(openButton, COLORS.bg, COLORS.bar)
+
+local openLetter = Instance.new("TextLabel")
+openLetter.Size = UDim2.new(1, 0, 1, 0)
+openLetter.BackgroundTransparency = 1
+openLetter.Text = "S"
+openLetter.TextColor3 = Color3.new(1, 1, 1)
+openLetter.Font = Enum.Font.GothamBlack
+openLetter.TextSize = 24
+openLetter.Parent = openButton
+gradient(openLetter, 45)
+
+-- Главное окно
+local menu = Instance.new("Frame")
+menu.Size = UDim2.new(0, W, 0, H)
+menu.Position = UDim2.new(0.5, -W / 2, 0.5, -H / 2)
+menu.BackgroundColor3 = COLORS.bg
+menu.BackgroundTransparency = T.menu
+menu.BorderSizePixel = 0
+menu.ClipsDescendants = true
+menu.Visible = false
+menu.Parent = gui
+round(menu, 16)
+gradientStroke(menu, 2)
+
+local scale = Instance.new("UIScale")
+scale.Scale = 1
+scale.Parent = menu
+
+-- Боковая панель (углы скругляет само окно)
+local sidebar = Instance.new("Frame")
+sidebar.Size = UDim2.new(0, SIDE, 1, 0)
+sidebar.BackgroundColor3 = COLORS.bar
+sidebar.BackgroundTransparency = T.side
+sidebar.BorderSizePixel = 0
+sidebar.Parent = menu
+
+local logoArea = Instance.new("Frame")
+logoArea.Size = UDim2.new(1, 0, 0, 62)
+logoArea.BackgroundTransparency = 1
+logoArea.Parent = sidebar
+
+local brand = label(logoArea, "skorlypa", 22, Enum.Font.GothamBlack, Color3.new(1, 1, 1), 0, 12, SIDE, 28, Enum.TextXAlignment.Center)
+gradient(brand, 0)
+label(logoArea, "visual menu", 11, Enum.Font.Gotham, COLORS.sub, 0, 40, SIDE, 14, Enum.TextXAlignment.Center)
+
+label(sidebar, "RightShift", 12, Enum.Font.GothamBold, COLORS.sub, 0, H - 44, SIDE, 16, Enum.TextXAlignment.Center)
+label(sidebar, "открыть / закрыть", 11, Enum.Font.Gotham, COLORS.sub, 0, H - 28, SIDE, 14, Enum.TextXAlignment.Center)
+
+-- Верхняя панель
+local topBar = Instance.new("Frame")
+topBar.Size = UDim2.new(1, -SIDE, 0, 46)
+topBar.Position = UDim2.new(0, SIDE, 0, 0)
+topBar.BackgroundTransparency = 1
+topBar.Parent = menu
+
+local accentLine = Instance.new("Frame")
+accentLine.Size = UDim2.new(1, -SIDE, 0, 2)
+accentLine.Position = UDim2.new(0, SIDE, 0, 46)
+accentLine.BackgroundColor3 = Color3.new(1, 1, 1)
+accentLine.BorderSizePixel = 0
+accentLine.Parent = menu
+gradient(accentLine, 0)
+
+local dot = Instance.new("Frame")
+dot.Size = UDim2.new(0, 10, 0, 10)
+dot.Position = UDim2.new(0, 16, 0.5, -5)
+dot.BackgroundColor3 = Color3.new(1, 1, 1)
+dot.BorderSizePixel = 0
+dot.Parent = topBar
+round(dot, 5)
+gradient(dot, 45)
+
+local pageTitle = label(topBar, "Визуал", 18, Enum.Font.GothamBold, COLORS.text, 34, 0, 160, 46)
+
+local pinButton = Instance.new("TextButton")
+pinButton.Size = UDim2.new(0, 28, 0, 28)
+pinButton.Position = UDim2.new(1, -74, 0.5, -14)
+pinButton.BackgroundColor3 = COLORS.button
+pinButton.BackgroundTransparency = T.button
+pinButton.Text = "📌"
+pinButton.TextSize = 15
+pinButton.Font = Enum.Font.GothamBold
+pinButton.TextColor3 = COLORS.text
+pinButton.AutoButtonColor = false
+pinButton.Parent = topBar
+round(pinButton, 8)
+
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 28, 0, 28)
+closeButton.Position = UDim2.new(1, -40, 0.5, -14)
+closeButton.BackgroundColor3 = COLORS.button
+closeButton.BackgroundTransparency = T.button
+closeButton.Text = ""
+closeButton.AutoButtonColor = false
+closeButton.Parent = topBar
+round(closeButton, 8)
+
+for _, angle in ipairs({45, -45}) do
+	local line = Instance.new("Frame")
+	line.Size = UDim2.new(0, 14, 0, 2)
+	line.AnchorPoint = Vector2.new(0.5, 0.5)
+	line.Position = UDim2.new(0.5, 0, 0.5, 0)
+	line.Rotation = angle
+	line.BackgroundColor3 = COLORS.text
+	line.BorderSizePixel = 0
+	line.Parent = closeButton
+	round(line, 1)
+end
+
+addHover(closeButton, COLORS.button, COLORS.accent)
+
+local function applyLockVisual()
+	if locked then
+		tween(pinButton, 0.15, {BackgroundColor3 = COLORS.accent})
+	else
+		tween(pinButton, 0.15, {BackgroundColor3 = COLORS.button})
+	end
+end
+
+pinButton.MouseEnter:Connect(function()
+	if not locked then
+		tween(pinButton, 0.12, {BackgroundColor3 = COLORS.buttonHover})
+	end
+end)
+pinButton.MouseLeave:Connect(function()
+	if not locked then
+		tween(pinButton, 0.12, {BackgroundColor3 = COLORS.button})
+	end
+end)
+
+pinButton.MouseButton1Click:Connect(function()
+	locked = not locked
+	applyLockVisual()
+end)
+
+-- Страницы
+local function nextOrder(page)
+	local n = (page:GetAttribute("n") or 0) + 1
+	page:SetAttribute("n", n)
+	return n
+end
+
+local function makePage()
+	local page = Instance.new("ScrollingFrame")
+	page.Size = UDim2.new(1, -160, 1, -70)
+	page.Position = UDim2.new(0, SIDE + 14, 0, 58)
+	page.BackgroundTransparency = 1
+	page.BorderSizePixel = 0
+	page.ScrollBarThickness = 3
+	page.ScrollBarImageColor3 = COLORS.accent
+	page.CanvasSize = UDim2.new(0, 0, 0, 0)
+	page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	page.Visible = false
+	page.Parent = menu
+
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, 8)
+	layout.Parent = page
+
+	return page
+end
+
+local function makeToggle(page, title, sub, default, callback)
+	local row = Instance.new("TextButton")
+	row.Size = UDim2.new(1, -8, 0, 62)
+	row.BackgroundColor3 = COLORS.card
+	row.BackgroundTransparency = T.card
+	row.Text = ""
+	row.AutoButtonColor = false
+	row.LayoutOrder = nextOrder(page)
+	row.Parent = page
+	round(row, 12)
+	addHover(row, COLORS.card, COLORS.cardHover)
+
+	label(row, title, 15, Enum.Font.GothamBold, COLORS.text, 14, 11, 190, 22)
+	label(row, sub, 12, Enum.Font.Gotham, COLORS.sub, 14, 33, 190, 18)
+
+	local track = Instance.new("Frame")
+	track.Size = UDim2.new(0, 50, 0, 26)
+	track.Position = UDim2.new(1, -64, 0.5, -13)
+	track.BackgroundColor3 = COLORS.off
+	track.BorderSizePixel = 0
+	track.Parent = row
+	round(track, 13)
+
+	local knob = Instance.new("Frame")
+	knob.Size = UDim2.new(0, 20, 0, 20)
+	knob.Position = UDim2.new(0, 3, 0.5, -10)
+	knob.BackgroundColor3 = Color3.new(1, 1, 1)
+	knob.BorderSizePixel = 0
+	knob.Parent = track
+	round(knob, 10)
+
+	local state = default
+	local function set(value, silent)
+		state = value
+		if value then
+			tween(knob, 0.18, {Position = UDim2.new(1, -23, 0.5, -10)})
+			tween(track, 0.18, {BackgroundColor3 = COLORS.on})
+		else
+			tween(knob, 0.18, {Position = UDim2.new(0, 3, 0.5, -10)})
+			tween(track, 0.18, {BackgroundColor3 = COLORS.off})
+		end
+		if not silent then
+			callback(value)
+		end
+	end
+
+	row.MouseButton1Click:Connect(function()
+		set(not state)
+	end)
+
+	set(default, true)
+	return set
+end
+
+local function makeColorRow(page, title, colors, onPick)
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, -8, 0, 78)
+	row.BackgroundColor3 = COLORS.card
+	row.BackgroundTransparency = T.card
+	row.BorderSizePixel = 0
+	row.LayoutOrder = nextOrder(page)
+	row.Parent = page
+	round(row, 12)
+
+	label(row, title, 15, Enum.Font.GothamBold, COLORS.text, 14, 10, 220, 22)
+
+	local strokes = {}
+	for i, color in ipairs(colors) do
+		local b = Instance.new("TextButton")
+		b.Size = UDim2.new(0, 30, 0, 30)
+		b.Position = UDim2.new(0, 14 + (i - 1) * 40, 0, 38)
+		b.BackgroundColor3 = color
+		b.Text = ""
+		b.AutoButtonColor = false
+		b.Parent = row
+		round(b, 15)
+
+		local s = Instance.new("UIStroke")
+		s.Thickness = 2
+		s.Color = Color3.new(1, 1, 1)
+		s.Transparency = 1
+		s.Parent = b
+		strokes[i] = s
+
+		b.MouseButton1Click:Connect(function()
+			for j, st in ipairs(strokes) do
+				st.Transparency = (j == i) and 0 or 1
+			end
+			onPick(color)
+		end)
+	end
+	strokes[1].Transparency = 0
+end
+
+local function makeChoiceRow(page, title, options, onPick)
+	local rows = math.ceil(#options / 2)
+	local gridH = rows * 34 + (rows - 1) * 8
+
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, -8, 0, 38 + gridH + 14)
+	row.BackgroundColor3 = COLORS.card
+	row.BackgroundTransparency = T.card
+	row.BorderSizePixel = 0
+	row.LayoutOrder = nextOrder(page)
+	row.Parent = page
+	round(row, 12)
+
+	label(row, title, 15, Enum.Font.GothamBold, COLORS.text, 14, 10, 220, 22)
+
+	local grid = Instance.new("Frame")
+	grid.Size = UDim2.new(1, -28, 0, gridH)
+	grid.Position = UDim2.new(0, 14, 0, 38)
+	grid.BackgroundTransparency = 1
+	grid.Parent = row
+
+	local layout = Instance.new("UIGridLayout")
+	layout.CellSize = UDim2.new(0.5, -4, 0, 34)
+	layout.CellPadding = UDim2.new(0, 8, 0, 8)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = grid
+
+	local strokes = {}
+	local function mark(index)
+		for j, st in ipairs(strokes) do
+			st.Transparency = (j == index) and 0 or 1
+		end
+	end
+
+	for i, name in ipairs(options) do
+		local b = Instance.new("TextButton")
+		b.LayoutOrder = i
+		b.BackgroundColor3 = COLORS.button
+		b.BackgroundTransparency = T.button
+		b.Text = name
+		b.TextColor3 = COLORS.text
+		b.Font = Enum.Font.GothamBold
+		b.TextSize = 13
+		b.AutoButtonColor = false
+		b.Parent = grid
+		round(b, 9)
+		addHover(b, COLORS.button, COLORS.buttonHover)
+
+		local s = Instance.new("UIStroke")
+		s.Thickness = 2
+		s.Color = Color3.new(1, 1, 1)
+		s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		s.Transparency = 1
+		s.Parent = b
+		gradient(s, 45)
+		strokes[i] = s
+
+		b.MouseButton1Click:Connect(function()
+			mark(i)
+			onPick(i)
+		end)
+	end
+
+	mark(1)
+end
+
+local function makeSlider(page, title, min, max, default, decimals, onChange)
+	local m = 10 ^ decimals
+
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, -8, 0, 68)
+	row.BackgroundColor3 = COLORS.card
+	row.BackgroundTransparency = T.card
+	row.BorderSizePixel = 0
+	row.LayoutOrder = nextOrder(page)
+	row.Parent = page
+	round(row, 12)
+
+	label(row, title, 15, Enum.Font.GothamBold, COLORS.text, 14, 10, 180, 22)
+	local valueLabel = label(row, tostring(default), 13, Enum.Font.GothamBold, COLORS.sub, 0, 10, 60, 22, Enum.TextXAlignment.Right)
+	valueLabel.Position = UDim2.new(1, -74, 0, 10)
+
+	local hit = Instance.new("TextButton")
+	hit.Size = UDim2.new(1, -28, 0, 24)
+	hit.Position = UDim2.new(0, 14, 0, 36)
+	hit.BackgroundTransparency = 1
+	hit.Text = ""
+	hit.AutoButtonColor = false
+	hit.Parent = row
+
+	local track = Instance.new("Frame")
+	track.Size = UDim2.new(1, 0, 0, 6)
+	track.Position = UDim2.new(0, 0, 0.5, -3)
+	track.BackgroundColor3 = COLORS.off
+	track.BorderSizePixel = 0
+	track.Parent = hit
+	round(track, 3)
+
+	local fill = Instance.new("Frame")
+	fill.BackgroundColor3 = Color3.new(1, 1, 1)
+	fill.BorderSizePixel = 0
+	fill.Parent = track
+	round(fill, 3)
+	gradient(fill, 0)
+
+	local knob = Instance.new("Frame")
+	knob.Size = UDim2.new(0, 16, 0, 16)
+	knob.AnchorPoint = Vector2.new(0.5, 0.5)
+	knob.BackgroundColor3 = Color3.new(1, 1, 1)
+	knob.BorderSizePixel = 0
+	knob.Parent = hit
+	round(knob, 8)
+
+	local function render(r)
+		fill.Size = UDim2.new(r, 0, 1, 0)
+		knob.Position = UDim2.new(r, 0, 0.5, 0)
+	end
+
+	local function setValue(v)
+		render(math.clamp((v - min) / (max - min), 0, 1))
+		valueLabel.Text = tostring(math.floor(v * m + 0.5) / m)
+	end
+	setValue(default)
+
+	local dragging = false
+	local function update(x)
+		local r = math.clamp((x - hit.AbsolutePosition.X) / hit.AbsoluteSize.X, 0, 1)
+		render(r)
+		local v = min + r * (max - min)
+		v = math.floor(v * m + 0.5) / m
+		valueLabel.Text = tostring(v)
+		onChange(v)
+	end
+
+	hit.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			update(input.Position.X)
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch) then
+			update(input.Position.X)
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+
+	return setValue
+end
+
+local function makeInfoRow(page, text)
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, -8, 0, 50)
+	row.BackgroundColor3 = COLORS.card
+	row.BackgroundTransparency = T.card
+	row.BorderSizePixel = 0
+	row.LayoutOrder = nextOrder(page)
+	row.Parent = page
+	round(row, 12)
+	label(row, text, 13, Enum.Font.Gotham, COLORS.sub, 14, 0, 280, 50)
+end
+
+local function makeFpsRow(page)
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, -8, 0, 62)
+	row.BackgroundColor3 = COLORS.card
+	row.BackgroundTransparency = T.card
+	row.BorderSizePixel = 0
+	row.LayoutOrder = nextOrder(page)
+	row.Parent = page
+	round(row, 12)
+
+	label(row, "Показатель FPS", 15, Enum.Font.GothamBold, COLORS.text, 14, 11, 190, 22)
+	label(row, "Обновляется каждые полсекунды", 12, Enum.Font.Gotham, COLORS.sub, 14, 33, 220, 18)
+
+	local value = label(row, "--", 24, Enum.Font.GothamBlack, COLORS.fpsGood, 0, 0, 70, 62, Enum.TextXAlignment.Right)
+	value.Position = UDim2.new(1, -84, 0, 0)
+
+	local frames = 0
+	local last = os.clock()
+
+	RunService.RenderStepped:Connect(function()
+		local now = os.clock()
+		if not menu.Visible then
+			frames = 0
+			last = now
+			return
+		end
+		frames += 1
+		if now - last >= 0.5 then
+			local fps = math.floor(frames / (now - last) + 0.5)
+			value.Text = tostring(fps)
+			if fps >= 50 then
+				value.TextColor3 = COLORS.fpsGood
+			elseif fps >= 30 then
+				value.TextColor3 = COLORS.fpsMid
+			else
+				value.TextColor3 = COLORS.fpsBad
+			end
+			frames = 0
+			last = now
+		end
+	end)
+end
+
+-- Подсветка и ники
+local function updatePlayer(player)
+	if player == localPlayer then
+		return
+	end
+	local character = player.Character
+
+	if hlOn and character then
+		local h = highlights[player]
+		if not h or h.Parent ~= character then
+			if h then
+				h:Destroy()
+			end
+			h = Instance.new("Highlight")
+			h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+			h.Adornee = character
+			h.Parent = character
+			highlights[player] = h
+		end
+		h.FillColor = hlColor
+		h.OutlineColor = hlColor
+		h.FillTransparency = hlTransparency
+	elseif highlights[player] then
+		highlights[player]:Destroy()
+		highlights[player] = nil
+	end
+
+	local head = character and character:FindFirstChild("Head")
+	if tagsOn and head then
+		local tag = nameTags[player]
+		if not tag or tag.Parent ~= head then
+			if tag then
+				tag:Destroy()
+			end
+			tag = Instance.new("BillboardGui")
+			tag.Name = "NameTag"
+			tag.Size = UDim2.new(0, 160, 0, 26)
+			tag.StudsOffset = Vector3.new(0, 2.6, 0)
+			tag.AlwaysOnTop = true
+			tag.MaxDistance = math.huge
+			tag.Adornee = head
+			tag.Parent = head
+
+			local l = Instance.new("TextLabel")
+			l.Size = UDim2.new(1, 0, 1, 0)
+			l.BackgroundTransparency = 1
+			l.Text = player.Name
+			l.TextColor3 = Color3.new(1, 1, 1)
+			l.TextStrokeColor3 = Color3.new(0, 0, 0)
+			l.TextStrokeTransparency = 0.2
+			l.Font = Enum.Font.GothamBold
+			l.TextSize = 16
+			l.Parent = tag
+
+			nameTags[player] = tag
+		end
+	elseif nameTags[player] then
+		nameTags[player]:Destroy()
+		nameTags[player] = nil
+	end
+end
+
+local function refreshAll()
+	for _, player in ipairs(Players:GetPlayers()) do
+		updatePlayer(player)
+	end
+end
+
+local function clearPlayer(player)
+	if highlights[player] then
+		highlights[player]:Destroy()
+		highlights[player] = nil
+	end
+	if nameTags[player] then
+		nameTags[player]:Destroy()
+		nameTags[player] = nil
+	end
+end
+
+local function trackPlayer(player)
+	player.CharacterAdded:Connect(function(character)
+		character:WaitForChild("Head", 5)
+		task.wait(0.1)
+		updatePlayer(player)
+	end)
+end
+
+for _, player in ipairs(Players:GetPlayers()) do
+	trackPlayer(player)
+end
+Players.PlayerAdded:Connect(trackPlayer)
+Players.PlayerRemoving:Connect(clearPlayer)
+
+-- Небо
+local originalSky = Lighting:FindFirstChildOfClass("Sky")
+local originalAtmo = Lighting:FindFirstChildOfClass("Atmosphere")
+local original = {
+	time = Lighting.ClockTime,
+	ambient = Lighting.Ambient,
+	outdoor = Lighting.OutdoorAmbient,
+}
+
+local presetSky, presetAtmo, presetCC
+local timeSet = function() end
+
+local function clearPresets()
+	if presetSky then
+		presetSky:Destroy()
+		presetSky = nil
+	end
+	if presetAtmo then
+		presetAtmo:Destroy()
+		presetAtmo = nil
+	end
+	if presetCC then
+		presetCC:Destroy()
+		presetCC = nil
+	end
+end
+
+local function restoreOriginals()
+	if originalSky then
+		originalSky.Parent = Lighting
+	end
+	if originalAtmo then
+		originalAtmo.Parent = Lighting
+	end
+	Lighting.Ambient = original.ambient
+	Lighting.OutdoorAmbient = original.outdoor
+end
+
+local function hideOriginals()
+	if originalSky then
+		originalSky.Parent = nil
+	end
+	if originalAtmo then
+		originalAtmo.Parent = nil
+	end
+end
+
+local function applySky(index)
+	local s = SKIES[index]
+
+	clearPresets()
+
+	if s.default then
+		restoreOriginals()
+		Lighting.ClockTime = original.time
+		timeSet(original.time)
+		return
+	end
+
+	hideOriginals()
+
+	presetSky = Instance.new("Sky")
+	presetSky.StarCount = s.stars
+	presetSky.CelestialBodiesShown = not s.black
+	if s.black then
+		presetSky.SkyboxBk = ""
+		presetSky.SkyboxDn = ""
+		presetSky.SkyboxFt = ""
+		presetSky.SkyboxLf = ""
+		presetSky.SkyboxRt = ""
+		presetSky.SkyboxUp = ""
+	end
+	presetSky.Parent = Lighting
+
+	if s.atmo then
+		presetAtmo = Instance.new("Atmosphere")
+		presetAtmo.Density = s.atmo.density
+		presetAtmo.Offset = s.atmo.offset
+		presetAtmo.Color = s.atmo.color
+		presetAtmo.Decay = s.atmo.decay
+		presetAtmo.Glare = s.atmo.glare
+		presetAtmo.Haze = s.atmo.haze
+		presetAtmo.Parent = Lighting
+	end
+
+	presetCC = Instance.new("ColorCorrectionEffect")
+	presetCC.TintColor = s.tint
+	presetCC.Saturation = s.saturation
+	presetCC.Parent = Lighting
+
+	Lighting.Ambient = s.ambient
+	Lighting.OutdoorAmbient = s.outdoor
+	Lighting.ClockTime = s.time
+	timeSet(s.time)
+end
+
+-- Вкладки
+local tabNames = {"Визуал", "Мир", "Настройки"}
+local pages = {makePage(), makePage(), makePage()}
+local tabButtons = {}
+
+-- Вкладка 1: Визуал
+makeToggle(pages[1], "Подсветка игроков", "Сквозь стены", false, function(state)
+	hlOn = state
+	refreshAll()
+end)
+makeToggle(pages[1], "Ники", "Над головой игроков", false, function(state)
+	tagsOn = state
+	refreshAll()
+end)
+makeColorRow(pages[1], "Цвет подсветки", SWATCHES, function(color)
+	hlColor = color
+	refreshAll()
+end)
+makeSlider(pages[1], "Прозрачность", 0, 1, 0.5, 2, function(v)
+	hlTransparency = v
+	refreshAll()
+end)
+
+-- Вкладка 2: Мир
+local skyNames = {}
+for i, s in ipairs(SKIES) do
+	skyNames[i] = s.name
+end
+makeChoiceRow(pages[2], "Небо", skyNames, applySky)
+
+timeSet = makeSlider(pages[2], "Время суток", 0, 24, math.floor(Lighting.ClockTime * 10 + 0.5) / 10, 1, function(v)
+	Lighting.ClockTime = v
+end)
+makeSlider(pages[2], "Яркость", 0, 5, math.floor(Lighting.Brightness * 10 + 0.5) / 10, 1, function(v)
+	Lighting.Brightness = v
+end)
+
+-- Вкладка 3: Настройки
+makeFpsRow(pages[3])
+makeInfoRow(pages[3], "Открыть / закрыть меню: RightShift")
+
+local function selectTab(index)
+	for i, p in ipairs(pages) do
+		p.Visible = (i == index)
+	end
+	for i, t in ipairs(tabButtons) do
+		local on = (i == index)
+		tween(t.button, 0.15, {
+			BackgroundTransparency = on and 0.3 or 1,
+			TextColor3 = on and COLORS.text or COLORS.sub,
+		})
+		t.indicator.Visible = on
+	end
+	pageTitle.Text = tabNames[index]
+end
+
+for i, name in ipairs(tabNames) do
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(1, -20, 0, 38)
+	b.Position = UDim2.new(0, 10, 0, 74 + (i - 1) * 44)
+	b.BackgroundColor3 = COLORS.card
+	b.BackgroundTransparency = 1
+	b.Text = name
+	b.TextColor3 = COLORS.sub
+	b.Font = Enum.Font.GothamBold
+	b.TextSize = 15
+	b.TextXAlignment = Enum.TextXAlignment.Left
+	b.AutoButtonColor = false
+	b.Parent = sidebar
+	round(b, 10)
+
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0, 16)
+	pad.Parent = b
+
+	local indicator = Instance.new("Frame")
+	indicator.Size = UDim2.new(0, 3, 0, 20)
+	indicator.Position = UDim2.new(0, -13, 0.5, -10)
+	indicator.BackgroundColor3 = Color3.new(1, 1, 1)
+	indicator.BorderSizePixel = 0
+	indicator.Visible = false
+	indicator.Parent = b
+	round(indicator, 2)
+	gradient(indicator, 90)
+
+	b.MouseButton1Click:Connect(function()
+		selectTab(i)
+	end)
+
+	tabButtons[i] = {button = b, indicator = indicator}
+end
+
+-- Открытие и закрытие
+local function setOpen(state)
+	isOpen = state
+	openButton.Visible = not state
+	if state then
+		scale.Scale = 0.85
+		menu.Visible = true
+		TweenService:Create(scale, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1}):Play()
+	else
+		local p = menu.Position
+		openButton.Position = UDim2.new(p.X.Scale, p.X.Offset + W - 49, p.Y.Scale, p.Y.Offset)
+		local t = TweenService:Create(scale, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Scale = 0.85})
+		t.Completed:Connect(function()
+			if not isOpen then
+				menu.Visible = false
+			end
+		end)
+		t:Play()
+	end
+end
+
+openButton.MouseButton1Click:Connect(function()
+	setOpen(true)
+end)
+
+closeButton.MouseButton1Click:Connect(function()
+	setOpen(false)
+end)
+
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then
+		return
+	end
+	if input.KeyCode == Enum.KeyCode.RightShift then
+		setOpen(not isOpen)
+	end
+end)
+
+-- Перетаскивание
+local function makeDraggable(handle, target)
+	local dragging = false
+	local dragStart
+	local startPos
+
+	handle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			if locked then
+				return
+			end
+			dragging = true
+			dragStart = input.Position
+			startPos = target.Position
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and not locked and (input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch) then
+			local delta = input.Position - dragStart
+			target.Position = UDim2.new(
+				startPos.X.Scale, startPos.X.Offset + delta.X,
+				startPos.Y.Scale, startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+end
+
+makeDraggable(topBar, menu)
+makeDraggable(logoArea, menu)
+
+selectTab(1)
+setOpen(true)
